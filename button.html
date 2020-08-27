@@ -1,0 +1,28 @@
+<html>
+	<script>
+		function httpGetAsync(theUrl, callback)
+		{
+		    var xmlHttp = new XMLHttpRequest();
+		    xmlHttp.onreadystatechange = function() { 
+			if (xmlHttp.readyState == 4 && xmlHttp.status == 200)
+			    callback(xmlHttp.responseText);
+		    }
+		    xmlHttp.open("GET", theUrl, true); // true for asynchronous 
+		    xmlHttp.send(null);
+		}
+
+		function givenum() {
+			httpGetAsync("/num", (text) => {
+				alert(text)
+			})
+		}
+	</script>
+	<head>
+        <meta charset="utf-8">
+        <title>Циферка</title>
+    </head>
+	<button onclick="givenum()">Дай цифру</button>
+    <a href="http://localhost:8080/auth">
+        <button>Выход</button>
+    </a>
+</html>

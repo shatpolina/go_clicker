@@ -1,0 +1,29 @@
+<html>
+	<head>
+        <meta charset="utf-8">
+        <title>ВХОД</title>
+
+        <script src="https://cdn.jsdelivr.net/gh/emn178/js-sha256/build/sha256.min.js"></script>
+        <script>
+            function pwd_handler(form)
+            {
+                if (form.password.value != '')
+                {
+                    form.password.value = sha256(form.password.value);
+                }
+            }
+        </script>
+    </head>
+    <body>
+        <form id="authForm" action="" method="post" onsubmit="return pwd_handler(this);">
+            <p><strong>Логин:</strong> 
+            <input maxlength="25" size="40" name="login" pattern="^[A-Za-z0-9]{6+}"></p>
+            <p><strong>Пароль:</strong> 
+            <input type="password" maxlength="25" size="40" name="password"></p>
+            <p><input type="submit" value="Войти"></p>
+        </form>
+        <a href="http://localhost:8080/reg">
+            <button>Регистрация</button>
+        </a>
+    </body>
+</html>
