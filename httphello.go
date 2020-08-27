@@ -47,6 +47,7 @@ func main() {
     
     http.HandleFunc("/auth", Authorization)
     http.HandleFunc("/reg", Registration)
+    http.HandleFunc("/exit", Exit)
     http.HandleFunc("/hello", HelloServer)
     http.HandleFunc("/num", Givenum)
     http.ListenAndServe(":8080", nil)
@@ -78,20 +79,26 @@ func setSession(w http.ResponseWriter) {
     fmt.Println("Cookie set")
 }
 
-func Authorization(w http.ResponseWriter, r *http.Request) {
+func checkSession(w http.ResponseWriter, r *http.Request) {
     c, err := r.Cookie("session")
     if err != nil {
         setSession(w)
     } else {
         uuid := c.Value   
-        if _, ok := sessionDB[uuid]; ok {
-            fmt.Println("Session auth")
+        if session, ok := sessionDB[uuid]; ok {
+            if session.UserID != -1 {
+                fmt.Println("AutoAuth")
+                http.Redirect(w, r, "/hello", http.StatusSeeOther)
+            }
         } else {
             setSession(w)
         }
-        fmt.Println("Cookie check ok")
     }
+    fmt.Println("Session check")
+}
 
+func Authorization(w http.ResponseWriter, r *http.Request) {
+    checkSession(w, r)
     r.ParseForm()
 
     if len(r.Form["login"]) == 1 && len(r.Form["password"]) == 1 {
@@ -119,19 +126,7 @@ func Authorization(w http.ResponseWriter, r *http.Request) {
 }
 
 func Registration(w http.ResponseWriter, r *http.Request) {
-    c, err := r.Cookie("session")
-    if err != nil {
-        setSession(w)
-    } else {
-        uuid := c.Value   
-        if _, ok := sessionDB[uuid]; ok {
-            fmt.Println("Session auth")
-        } else {
-            setSession(w)
-        }
-        fmt.Println("Cookie check ok")
-    }
-
+    checkSession(w, r)
     r.ParseForm()
     
     if len(r.Form["login"]) == 1 && len(r.Form["password"]) == 1 {
@@ -160,12 +155,15 @@ func HelloServer(w http.ResponseWriter, r *http.Request) {
         http.Redirect(w, r, "/auth", http.StatusSeeOther)
     } else {
         uuid := c.Value   
-        if _, ok := sessionDB[uuid]; ok {
-            fmt.Println("Session auth")
+        if session, ok := sessionDB[uuid]; ok {
+            if session.UserID != -1 {
+                fmt.Println("/hello AutoAuth")
+            } else {
+                http.Redirect(w, r, "/auth", http.StatusSeeOther)
+            }
         } else {
             http.Redirect(w, r, "/auth", http.StatusSeeOther)
         }
-        fmt.Println("Cookie check ok")
     }
 
     saveDB("sessions.json", sessionDB)
@@ -188,6 +186,23 @@ func Givenum(w http.ResponseWriter, r *http.Request) {
             saveDB("users.json", userDB)
         } else {
             fmt.Fprintf(w, "ТЫ ЧО, МЕНЯ НАЕБАТЬ РЕШИЛ??!!!")
+        }
+    }
+}
+
+func Exit(w http.ResponseWriter, r *http.Request) {
+    c, err := r.Cookie("session")
+    if err != nil {
+        http.Redirect(w, r, "/auth", http.StatusSeeOther)
+    } else { 
+        if _, ok := sessionDB[c.Value]; ok {
+            var session *Session = sessionDB[c.Value]
+            session.UserID = -1
+            saveDB("sessions.json", sessionDB)
+            fmt.Println("User exit, c.Value: " + c.Value)
+            http.Redirect(w, r, "/auth", http.StatusSeeOther)
+        } else {
+            http.Redirect(w, r, "/auth", http.StatusSeeOther)
         }
     }
 }
