@@ -6,44 +6,32 @@ import (
     "io/ioutil"
     "time"
     "crypto/rand"
-    "encoding/json"
+    _ "github.com/lib/pq"
+    "database/sql"
 )
 
+var db *sql.DB
+
 type Session struct {
+    UUID string `json:"uuid"`
     UserID int `json:"id"`
 }
 
 type User struct {
+    UserID int `json:"id"`
     Login string `json:"login"`
     Password string `json:"password"`
     Num int `json:"num"`
 }
 
-var sessionDB (map[string]*Session)
-var userDB (map[int]*User)
-
-func readDB(file string, container interface{}) {
-    rawDataIn, err := ioutil.ReadFile(file)
-    if err != nil {
-        fmt.Println("Cannot load " + file)
-    }
-    err = json.Unmarshal(rawDataIn, &container)
-    if err != nil {
-        fmt.Println("Invalid format " + file, err)
-    }
-}
-
-func saveDB(file string, container interface{}) {
-    data, _ := json.Marshal(container)
-    ioutil.WriteFile(file, []byte(data), 0644)
-    fmt.Println("DB " + file + " saved")
-}
-
 func main() {
-    sessionDB = make(map[string]*Session)
-    userDB = make(map[int]*User)
-    readDB("sessions.json", &sessionDB)
-    readDB("users.json", &userDB)
+    connStr := "user=postgres password=postgres dbname=httphello sslmode=disable"
+    local_db, err := sql.Open("postgres", connStr)
+    db = local_db
+    if err != nil {
+        panic(err)
+    } 
+    defer db.Close()
     
     http.HandleFunc("/auth", Authorization)
     http.HandleFunc("/reg", Registration)
@@ -73,48 +61,54 @@ func setCookie(w http.ResponseWriter, name string, value string, ttl time.Durati
 func setSession(w http.ResponseWriter) {
     uuid := getUUID()
     setCookie(w, "session", uuid, 60)
-    var newSession *Session = new(Session)
-    newSession.UserID = -1
-    sessionDB[uuid] = newSession
+    _, err := db.Exec("insert into sessions (UUID, UserID) values ($1, $2)", uuid, nil)
+    if err != nil {
+        panic(err)
+    }
     fmt.Println("Cookie set")
 }
 
-func checkSession(w http.ResponseWriter, r *http.Request) {
+func checkSession(w http.ResponseWriter, r *http.Request, redirOnAuth string, redirOnNoAuth string) {
     c, err := r.Cookie("session")
     if err != nil {
         setSession(w)
+        if len(redirOnNoAuth) > 0 {
+            http.Redirect(w, r, redirOnNoAuth, http.StatusSeeOther)
+        }
     } else {
-        uuid := c.Value   
-        if session, ok := sessionDB[uuid]; ok {
-            if session.UserID != -1 {
-                fmt.Println("AutoAuth")
-                http.Redirect(w, r, "/hello", http.StatusSeeOther)
-            }
-        } else {
+        row := db.QueryRow("select * from sessions where UUID = $1", c.Value);
+        var dbUserID sql.NullInt64
+        var UUID string
+        err = row.Scan(&UUID, &dbUserID)
+        if err != nil {
             setSession(w)
+        }
+        if dbUserID.Valid {
+            if len(redirOnAuth) > 0 {
+                http.Redirect(w, r, redirOnAuth, http.StatusSeeOther)
+            }
+            fmt.Println("AutoAuth")
+        } else {
+            if len(redirOnNoAuth) > 0 {
+                http.Redirect(w, r, redirOnNoAuth, http.StatusSeeOther)
+            }
         }
     }
     fmt.Println("Session check")
 }
 
 func Authorization(w http.ResponseWriter, r *http.Request) {
-    checkSession(w, r)
+    checkSession(w, r, "/hello", "")
     r.ParseForm()
 
     if len(r.Form["login"]) == 1 && len(r.Form["password"]) == 1 {
-        auth := false
-        for ID, user := range userDB {
-            if user.Login == r.Form["login"][0] && user.Password == r.Form["password"][0] {
-                c, _:= r.Cookie("session")
-                var session *Session = sessionDB[c.Value]
-                session.UserID = ID
-                saveDB("sessions.json", sessionDB)
-                fmt.Println(ID, session.UserID, c.Value)
-                auth = true
-                break
-            }
-        }
-        if auth {
+        login := r.Form["login"][0]
+        password := r.Form["password"][0]
+        var userID int
+        err := db.QueryRow("select UserID from users where Login = $1 and Password = $2", login, password).Scan(&userID)
+        if err == nil {
+            c, _:= r.Cookie("session")
+            db.Exec("update sessions set UserID = $1 where UUID = $2", userID, c.Value)
             http.Redirect(w, r, "/hello", http.StatusSeeOther)
         } else {
             fmt.Fprintf(w, string("Неверное имя пользователя или пароль"))
@@ -126,22 +120,16 @@ func Authorization(w http.ResponseWriter, r *http.Request) {
 }
 
 func Registration(w http.ResponseWriter, r *http.Request) {
-    checkSession(w, r)
+    checkSession(w, r, "/hello", "")
     r.ParseForm()
     
     if len(r.Form["login"]) == 1 && len(r.Form["password"]) == 1 {
-        user_id := len(userDB)
-        var user *User = new(User)
-        user.Login = r.Form["login"][0]
-        user.Password = r.Form["password"][0]
-        user.Num = 0
-        userDB[user_id] = user
-        saveDB("users.json", userDB)
+        login := r.Form["login"][0]
+        password := r.Form["password"][0]
+        var userID int
+        db.QueryRow("insert into users (Login, Password, Num) values ($1, $2, $3) returning UserID", login, password, 0).Scan(&userID)
         c, _:= r.Cookie("session")
-        var session *Session = sessionDB[c.Value] 
-        session.UserID = user_id
-        saveDB("sessions.json", sessionDB)
-        fmt.Println(user_id, session.UserID, c.Value)
+        db.Exec("update sessions set UserID = $1 where UUID = $2", userID, c.Value)
         http.Redirect(w, r, "/hello", http.StatusSeeOther)
     } else {
         dat, _ := ioutil.ReadFile("./registration.html")
@@ -150,59 +138,26 @@ func Registration(w http.ResponseWriter, r *http.Request) {
 }
 
 func HelloServer(w http.ResponseWriter, r *http.Request) {
-    c, err := r.Cookie("session")
-    if err != nil {
-        http.Redirect(w, r, "/auth", http.StatusSeeOther)
-    } else {
-        uuid := c.Value   
-        if session, ok := sessionDB[uuid]; ok {
-            if session.UserID != -1 {
-                fmt.Println("/hello AutoAuth")
-            } else {
-                http.Redirect(w, r, "/auth", http.StatusSeeOther)
-            }
-        } else {
-            http.Redirect(w, r, "/auth", http.StatusSeeOther)
-        }
-    }
-
-    saveDB("sessions.json", sessionDB)
-    saveDB("users.json", userDB)
-    
+    checkSession(w, r, "", "/auth")
     dat, _ := ioutil.ReadFile("./button.html")
     fmt.Fprintf(w, string(dat))
 }
 
 func Givenum(w http.ResponseWriter, r *http.Request) {
-    c, err := r.Cookie("session")
-    if err != nil {
-        http.Redirect(w, r, "/auth", http.StatusSeeOther)
-    } else {
-        uuid := c.Value
-        if session, ok := sessionDB[uuid]; ok {
-            var user *User = userDB[session.UserID]
-            fmt.Fprintf(w, "%d", user.Num)
-            user.Num += 1
-            saveDB("users.json", userDB)
-        } else {
-            fmt.Fprintf(w, "ТЫ ЧО, МЕНЯ НАЕБАТЬ РЕШИЛ??!!!")
-        }
-    }
+    checkSession(w, r, "", "/auth")
+    c, _ := r.Cookie("session")
+    var userID int
+    db.QueryRow("select UserID from sessions where UUID = $1", c.Value).Scan(&userID)
+    var num int
+    db.QueryRow("select Num from users where UserID = $1", userID).Scan(&num)
+    fmt.Fprintf(w, "%d", num)
+    db.Exec("update users set Num = $1 where UserID = $2", num + 1, userID)
 }
 
 func Exit(w http.ResponseWriter, r *http.Request) {
-    c, err := r.Cookie("session")
-    if err != nil {
-        http.Redirect(w, r, "/auth", http.StatusSeeOther)
-    } else { 
-        if _, ok := sessionDB[c.Value]; ok {
-            var session *Session = sessionDB[c.Value]
-            session.UserID = -1
-            saveDB("sessions.json", sessionDB)
-            fmt.Println("User exit, c.Value: " + c.Value)
-            http.Redirect(w, r, "/auth", http.StatusSeeOther)
-        } else {
-            http.Redirect(w, r, "/auth", http.StatusSeeOther)
-        }
-    }
+    checkSession(w, r, "", "/auth")
+    c, _:= r.Cookie("session")
+    db.Exec("update sessions set UserID = $1 where UUID = $2", nil, c.Value)
+    fmt.Println("user exit")
+    http.Redirect(w, r, "/auth", http.StatusSeeOther)
 }
