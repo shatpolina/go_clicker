@@ -69,6 +69,7 @@ input[type=text]:focus, input[type=password]:focus {
   background-color: #4CAF50;
   color: white;
 }
+
 </style>
 <script src="https://cdn.jsdelivr.net/gh/emn178/js-sha256/build/sha256.min.js"></script>
 <script>
@@ -80,6 +81,26 @@ input[type=text]:focus, input[type=password]:focus {
             form.password2.value = '';
         }
     }
+    
+	function httpGetAsync(theUrl, callback)
+	{
+	    var xmlHttp = new XMLHttpRequest();
+	    xmlHttp.onreadystatechange = function() { 
+		if (xmlHttp.readyState == 4 && xmlHttp.status == 200)
+		    callback(xmlHttp.responseText);
+	    }
+	    xmlHttp.open("GET", theUrl, true); // true for asynchronous 
+	    xmlHttp.send(null);
+	}
+	
+	function check_login(field)
+	{
+	    httpGetAsync("/checklogin?login=" + field.value, (text) => {
+	        if (text.length > 1) {
+			    alert(text)
+	        }
+		})
+	}
 </script>
 </head>
 <body>
@@ -90,7 +111,7 @@ input[type=text]:focus, input[type=password]:focus {
     <p>Please fill in this form to create an account.</p>
 
     <label for="login"><b>Login</b></label>
-    <input type="text" placeholder="Enter Login" name="login" pattern="^[A-Za-z0-9]{6+}" required>
+    <input type="text" placeholder="Enter Login" name="login" onchange="check_login(this)" pattern="^[A-Za-z0-9]{6+}" required>
 
     <label for="password"><b>Password</b></label>
     <input type="password" placeholder="Enter Password" name="password" required>

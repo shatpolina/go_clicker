@@ -35,6 +35,7 @@ func main() {
     
     http.HandleFunc("/auth", Authorization)
     http.HandleFunc("/reg", Registration)
+    http.HandleFunc("/checklogin", CheckLogin)
     http.HandleFunc("/exit", Exit)
     http.HandleFunc("/hello", HelloServer)
     http.HandleFunc("/num", Givenum)
@@ -119,11 +120,24 @@ func Authorization(w http.ResponseWriter, r *http.Request) {
     }
 }
 
+func CheckLogin(w http.ResponseWriter, r *http.Request) {
+    r.ParseForm()
+    if len(r.Form["login"]) == 1 {
+        login := r.Form["login"][0]
+        var value int
+        db.QueryRow("select UserID from users where Login = $1", login).Scan(&value)
+        if value > 0 {
+            fmt.Fprintf(w, string("Login taken, return on register"))
+        }
+    }
+}
+
 func Registration(w http.ResponseWriter, r *http.Request) {
     checkSession(w, r, "/hello", "")
     r.ParseForm()
     
     if len(r.Form["login"]) == 1 && len(r.Form["password"]) == 1 {
+        CheckLogin(w, r)
         login := r.Form["login"][0]
         password := r.Form["password"][0]
         var userID int
