@@ -33,12 +33,20 @@ func main() {
     } 
     defer db.Close()
     
+    rows, _ := db.Query("select userID from users")
+    for rows.Next() {
+        var userID int
+        rows.Scan(&userID)
+        go Clicker(1, userID)
+    }
+    
     http.HandleFunc("/auth", Authorization)
     http.HandleFunc("/reg", Registration)
     http.HandleFunc("/checklogin", CheckLogin)
     http.HandleFunc("/exit", Exit)
     http.HandleFunc("/hello", HelloServer)
-    http.HandleFunc("/num", Givenum)
+    http.HandleFunc("/clicknum", Clicknum)
+    http.HandleFunc("/givenum", Givenum)
     http.ListenAndServe(":8080", nil)
 }
 
@@ -151,10 +159,30 @@ func Registration(w http.ResponseWriter, r *http.Request) {
     }
 }
 
-func HelloServer(w http.ResponseWriter, r *http.Request) {
+// helloserver состоит из горутин кликеров и givenum (без изменений), кукис и сессии, среза?, цикла с переодичностью сохранения данных
+// убрать всё взаимодействие с бд в гивнум, в горутину добавить базу данных
+
+func Clicknum(w http.ResponseWriter, r *http.Request) {
     checkSession(w, r, "", "/auth")
-    dat, _ := ioutil.ReadFile("./button.html")
-    fmt.Fprintf(w, string(dat))
+    c, _ := r.Cookie("session")
+    var userID int
+    db.QueryRow("select UserID from sessions where UUID = $1", c.Value).Scan(&userID)
+    var num int
+    db.QueryRow("select Num from users where UserID = $1", userID).Scan(&num)
+    fmt.Fprintf(w, "%d", num)
+    db.Exec("update users set Num = $1 where UserID = $2", num + 1, userID)
+}
+
+func Clicker(numps int, userID int) {
+    // numps = num per sec
+    for {
+        var num int
+        db.QueryRow("select Num from users where UserID = $1", userID).Scan(&num)
+        value := num + numps
+        db.Exec("update users set Num = $1 where UserID = $2", value, userID)
+        fmt.Println(num, value)
+        time.Sleep(1 * time.Second)
+    }
 }
 
 func Givenum(w http.ResponseWriter, r *http.Request) {
@@ -165,7 +193,18 @@ func Givenum(w http.ResponseWriter, r *http.Request) {
     var num int
     db.QueryRow("select Num from users where UserID = $1", userID).Scan(&num)
     fmt.Fprintf(w, "%d", num)
-    db.Exec("update users set Num = $1 where UserID = $2", num + 1, userID)
+}
+
+// price := f_price + f_price * clickers * 0.1
+
+func HelloServer(w http.ResponseWriter, r *http.Request) {
+    checkSession(w, r, "", "/auth")
+    c, _ := r.Cookie("session")
+    var userID int
+    db.QueryRow("select UserID from sessions where UUID = $1", c.Value).Scan(&userID)
+    
+    dat, _ := ioutil.ReadFile("./button.html")
+    fmt.Fprintf(w, string(dat))
 }
 
 func Exit(w http.ResponseWriter, r *http.Request) {

@@ -58,13 +58,28 @@ body {
 	    xmlHttp.send(null);
 	}
 
-	function givenum() {
-		httpGetAsync("/num", (text) => {
-			alert(text)
+	function clicknum() {
+		httpGetAsync("/clicknum", (text) => {
+			document.getElementById("result").innerHTML = text;
 		})
 	}
+
+	function givenum() {
+		httpGetAsync("/givenum", (text) => {
+			document.getElementById("result").innerHTML = text;
+		})
+	}
+	
+    function ready() {
+        setInterval(() => {
+            givenum()
+        }, 1000)
+    }
+
+    document.addEventListener("DOMContentLoaded", ready);
 </script>
-	<button onclick="givenum()" class="numbtn">Give me number</button>
+	<button onclick="clicknum()" class="numbtn">Give me number</button>
+	<p>Ты накликал <output id="result"></output> кликов</p>
 <form action="/exit">
   <div class="container">
     <button class="logoutbtn">Log out</button>
