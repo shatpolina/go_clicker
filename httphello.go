@@ -15,6 +15,8 @@ import (
 
 var db *sql.DB
 
+var ch_disconnected chan string
+
 var upgrader = websocket.Upgrader {
     ReadBufferSize: 1024,
     WriteBufferSize: 1024,
@@ -30,6 +32,7 @@ type User struct {
     Login string `json:"login"`
     Password string `json:"password"`
     Num int `json:"num"`
+    Connected bool `json:"connected"`
 }
 
 type Clicker struct {
@@ -49,12 +52,9 @@ func main() {
     } 
     defer db.Close()
     
-    rows, _ := db.Query("select userID from users")
-    for rows.Next() {
-        var userID int
-        rows.Scan(&userID)
-        go Clickers(1, userID)
-    }
+    ch_disconnected = make(chan string)
+    
+    db.Exec("update users set Connected = $1", false)
     
     http.HandleFunc("/auth", Authorization)
     http.HandleFunc("/reg", Registration)
@@ -63,13 +63,30 @@ func main() {
     http.HandleFunc("/hello", HelloServer)
     http.HandleFunc("/clicknum", Clicknum)
     http.HandleFunc("/ws", wsEndpoint)
+    
     http.ListenAndServe(":8080", nil)
 }
+
+func test (conn *websocket.Conn, ch_disconnected chan string) {
+    for {
+        _, value, err := conn.ReadMessage()
+        if value != nil {
+            fmt.Println(value)
+        }
+        if err != nil {
+            fmt.Println("маслину поймал", err)
+            ch_disconnected <- "exit"
+            break
+        }
+    }
+}
+
+// через канал передавать из теста в воркер case exit
 
 func wsWorker(conn *websocket.Conn, userID int) {
     for {
         Clickers(1, userID)
-
+        
         var num int
         db.QueryRow("select Num from users where UserID = $1", userID).Scan(&num)
     
@@ -87,8 +104,14 @@ func wsWorker(conn *websocket.Conn, userID int) {
             log.Println(err)
             return
         }
+
         time.Sleep(1 * time.Second)
     }
+    exit := <- ch_disconnected
+    if exit == "exit" {
+        fmt.Println("YA RABOTAYU")
+    }
+    defer db.Exec("update users set Connected = $1 where UserID = $2", false, userID)
 }
 
 func wsEndpoint(w http.ResponseWriter, r *http.Request) {
@@ -110,9 +133,15 @@ func wsEndpoint(w http.ResponseWriter, r *http.Request) {
     }
     
     var userID int
+    var connected bool
     db.QueryRow("select UserID from sessions where UUID = $1", uuid).Scan(&userID)
+    db.QueryRow("select Connected from users where UserID = $1", userID).Scan(&connected)
     
-    go wsWorker(ws, userID)
+    if !connected {
+        go test(ws, ch_disconnected)
+        go wsWorker(ws, userID)
+        db.Exec("update users set Connected = $1 where UserID = $2", true, userID)
+    }
 }
 
 func getUUID()(uuid string) {
