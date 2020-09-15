@@ -15,8 +15,6 @@ import (
 
 var db *sql.DB
 
-var ch_disconnected chan string
-
 var upgrader = websocket.Upgrader {
     ReadBufferSize: 1024,
     WriteBufferSize: 1024,
@@ -32,15 +30,26 @@ type User struct {
     Login string `json:"login"`
     Password string `json:"password"`
     Num int `json:"num"`
+    Numps int `json:"numps"`
+    Price_clicker int `json:"price_clicker"`
+    Qty_clicker int `json:"qty_clicker"`
+    Price_super_clicker int `json:"price_super_clicker"`
+    Qty_super_clicker int `json:"qty_super_clicker"`
+    Price_mega_clicker int `json:"price_mega_clicker"`
+    Qty_mega_clicker int `json:"qty_mega_clicker"`
     Connected bool `json:"connected"`
 }
 
 type Clicker struct {
     UserID int `json:"id"`
-    Quantity int `json:"quantity"`
-    Worth int `json: worth`
     Numps int `json:"numps"`
     Num int `json:"num"`
+    Price_clicker int `json:"price_clicker"`
+    Qty_clicker int `json:"qty_clicker"`
+    Price_super_clicker int `json:"price_super_clicker"`
+    Qty_super_clicker int `json:"qty_super_clicker"`
+    Price_mega_clicker int `json:"price_mega_clicker"`
+    Qty_mega_clicker int `json:"qty_mega_clicker"`
 }
 
 func main() {
@@ -52,8 +61,6 @@ func main() {
     } 
     defer db.Close()
     
-    ch_disconnected = make(chan string)
-    
     db.Exec("update users set Connected = $1", false)
     
     http.HandleFunc("/auth", Authorization)
@@ -63,39 +70,53 @@ func main() {
     http.HandleFunc("/hello", HelloServer)
     http.HandleFunc("/clicknum", Clicknum)
     http.HandleFunc("/ws", wsEndpoint)
+    http.HandleFunc("/clickerbuy", ClickerBuy)
+    http.HandleFunc("/superclickerbuy", SuperClickerBuy)
+    http.HandleFunc("/megaclickerbuy", MegaClickerBuy)
     
     http.ListenAndServe(":8080", nil)
 }
 
-func test (conn *websocket.Conn, ch_disconnected chan string) {
+func test_ws (conn *websocket.Conn) {
     for {
         _, value, err := conn.ReadMessage()
         if value != nil {
             fmt.Println(value)
         }
         if err != nil {
-            fmt.Println("маслину поймал", err)
-            ch_disconnected <- "exit"
+            fmt.Println(err)
             break
         }
     }
 }
 
-// через канал передавать из теста в воркер case exit
-
 func wsWorker(conn *websocket.Conn, userID int) {
     for {
-        Clickers(1, userID)
+        Clickers(userID)
         
         var num int
-        db.QueryRow("select Num from users where UserID = $1", userID).Scan(&num)
+        var numps int
+        var price_clicker int
+        var qty_clicker int
+        var price_super_clicker int
+        var qty_super_clicker int 
+        var price_mega_clicker int 
+        var qty_mega_clicker int
+        
+        db.QueryRow("select Num, Numps, Price_clicker, Qty_clicker, Price_super_clicker, Qty_super_clicker, Price_mega_clicker, Qty_mega_clicker from users where UserID = $1", userID).Scan(&num, &numps, &price_clicker, &qty_clicker, &price_super_clicker, &qty_super_clicker, &price_mega_clicker, &qty_mega_clicker)
+        
+        fmt.Println("Test = userID:", userID, " Num:", num, " Numps:", numps, " Price:", price_clicker, " Qty:", qty_clicker)
     
         var message Clicker
         message.UserID = userID
-        message.Quantity = 1
-        message.Worth = 1
-        message.Numps = 1
+        message.Numps = numps
         message.Num = num
+        message.Price_clicker = price_clicker
+        message.Qty_clicker = qty_clicker
+        message.Price_super_clicker = price_super_clicker
+        message.Qty_super_clicker = qty_super_clicker
+        message.Price_mega_clicker = price_mega_clicker
+        message.Qty_mega_clicker = qty_mega_clicker
            
         data, _ := json.Marshal(message)
         msg := string(data)
@@ -104,14 +125,9 @@ func wsWorker(conn *websocket.Conn, userID int) {
             log.Println(err)
             return
         }
-
         time.Sleep(1 * time.Second)
+        defer db.Exec("update users set Connected = $1 where UserID = $2", false, userID)
     }
-    exit := <- ch_disconnected
-    if exit == "exit" {
-        fmt.Println("YA RABOTAYU")
-    }
-    defer db.Exec("update users set Connected = $1 where UserID = $2", false, userID)
 }
 
 func wsEndpoint(w http.ResponseWriter, r *http.Request) {
@@ -138,7 +154,7 @@ func wsEndpoint(w http.ResponseWriter, r *http.Request) {
     db.QueryRow("select Connected from users where UserID = $1", userID).Scan(&connected)
     
     if !connected {
-        go test(ws, ch_disconnected)
+        go test_ws(ws)
         go wsWorker(ws, userID)
         db.Exec("update users set Connected = $1 where UserID = $2", true, userID)
     }
@@ -243,7 +259,7 @@ func Registration(w http.ResponseWriter, r *http.Request) {
         login := r.Form["login"][0]
         password := r.Form["password"][0]
         var userID int
-        db.QueryRow("insert into users (Login, Password, Num) values ($1, $2, $3) returning UserID", login, password, 0).Scan(&userID)
+        db.QueryRow("insert into users (Login, Password, Num, Price_clicker, Qty_clicker, Price_super_clicker, Qty_super_clicker, Price_mega_clicker, Qty_mega_clicker, Numps) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning UserID", login, password, 0, 10, 0, 100, 0, 1000, 0, 0).Scan(&userID)
         c, _:= r.Cookie("session")
         db.Exec("update sessions set UserID = $1 where UUID = $2", userID, c.Value)
         http.Redirect(w, r, "/hello", http.StatusSeeOther)
@@ -265,12 +281,54 @@ func Clicknum(w http.ResponseWriter, r *http.Request) {
     db.Exec("update users set Num = $1 where UserID = $2", num, userID)
 }
 
-func Clickers(numps int, userID int) {
+func Clickers(userID int) {
     var num int
-    db.QueryRow("select Num from users where UserID = $1", userID).Scan(&num)
-    value := num + numps
-    db.Exec("update users set Num = $1 where UserID = $2", value, userID)
-    fmt.Println(num, value)
+    var numps int
+    db.QueryRow("select Num, Numps from users where UserID = $1", userID).Scan(&num, &numps)
+    num += numps
+    db.Exec("update users set Num = $1 where UserID = $2", num, userID)
+}
+
+func Buy(w http.ResponseWriter, r *http.Request, qty_name string, price_name string) {
+    checkSession(w, r, "", "/auth")
+    c, _ := r.Cookie("session")
+    var userID int
+    db.QueryRow("select UserID from sessions where UUID = $1", c.Value).Scan(&userID)
+    var num int
+    var numps int
+    var qty_value int
+    var price_value int
+    var select_text string = "select " + qty_name + ", " + price_name + ", Num, Numps from users where UserID = $1"
+    db.QueryRow(select_text, userID).Scan(&qty_value, &price_value, &num, &numps)
+    num -= price_value
+    if num > 0 {
+        qty_value += 1
+        price_value = int(float64(price_value) * 1.1)
+        if qty_name == "Qty_clicker" {
+            numps += qty_value * 1
+        } else if qty_name == "Qty_super_clicker" {
+            numps += qty_value * 10
+        } else if qty_name == "Qty_mega_clicker" {
+            numps += qty_value * 100
+        }
+        
+        db.Exec("update users set " + qty_name + "= $1," + price_name + "= $2, Num = $3, Numps = $4 where UserID = $5", qty_value, price_value, num, numps, userID)
+        fmt.Fprintf(w, "%d", qty_value)
+    } else {
+        fmt.Fprintf(w, "error")
+    }  
+}
+
+func ClickerBuy (w http.ResponseWriter, r *http.Request) {
+    Buy(w, r, "Qty_clicker", "Price_clicker")
+}
+
+func SuperClickerBuy (w http.ResponseWriter, r *http.Request) {
+    Buy(w, r, "Qty_super_clicker", "Price_super_clicker")
+}
+
+func MegaClickerBuy (w http.ResponseWriter, r *http.Request) {
+    Buy(w, r, "Qty_mega_clicker", "Price_mega_clicker")
 }
 
 func HelloServer(w http.ResponseWriter, r *http.Request) {

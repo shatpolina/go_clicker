@@ -28,6 +28,24 @@ body {
     opacity: 1;
 }
 
+.clktbtn {
+  background-color: white;
+  color: #4CAF50;
+  font-size: 15pt;
+  padding: 16px 20px;
+  margin: 8px 0;
+  border: none;
+  cursor: pointer;
+  width: 350px;
+  height: 55px;
+  transition: 0.3s;
+}
+
+.clktbtn:hover {
+  background-color: #4CAF50;
+  color: white;
+}
+
 .logoutbtn {
   background-color: white;
   color: #4CAF50;
@@ -74,6 +92,12 @@ body {
     socket.onmessage = function(event) {
         var msg = JSON.parse(event.data);
         document.getElementById("result").innerHTML = msg.num;
+        document.getElementById("result_click").innerHTML = msg.qty_clicker;
+        document.getElementById("result_superclick").innerHTML = msg.qty_super_clicker;
+        document.getElementById("result_megaclick").innerHTML = msg.qty_mega_clicker;
+        document.getElementById("price_clicker").innerHTML = msg.price_clicker;
+        document.getElementById("price_superclicker").innerHTML = msg.price_super_clicker;
+        document.getElementById("price_megaclicker").innerHTML = msg.price_mega_clicker;
 	}
 
 	function httpGetAsync(theUrl, callback)
@@ -90,11 +114,39 @@ body {
 	function clicknum() {
 		httpGetAsync("/clicknum", (text) => {
 			document.getElementById("result").innerHTML = text;
+			if (text == "error") {
+			    alert("Not enough clicks, you need N clicks")
+			}
 		})
+	}
+		
+    function clickerbuy() {
+        httpGetAsync("/clickerbuy", (text) => {
+	        document.getElementById("result_click").innerHTML = text;
+        })
+	}
+	
+    function superclickerbuy() {
+        httpGetAsync("/superclickerbuy", (text) => {
+	        document.getElementById("result_superclick").innerHTML = text;
+        })
+	}
+	
+    function megaclickerbuy() {
+        httpGetAsync("/megaclickerbuy", (text) => {
+	        document.getElementById("result_megaclick").innerHTML = text;
+        })
 	}
 </script>
 	<button onclick="clicknum()" class="numbtn">Give me number</button>
-	<p>Ты накликал <output id="result"></output> кликов</p>
+	<p>You have <output id="result"></output> clicks</p>
+	
+	<button onclick="clickerbuy()" class="clktbtn">Buy clicker (1)</button>
+	<button onclick="superclickerbuy()" class="clktbtn">Buy super clicker (10)</button>
+	<button onclick="megaclickerbuy()" class="clktbtn">Buy mega clicker (100)</button>
+	<p>You have <output id="result_click"></output> clicker price <output id="price_clicker"></output> numbers</p>
+	<p>You have <output id="result_superclick"></output> super clicker price <output id="price_superclicker"></output> numbers</p>
+	<p>You have <output id="result_megaclick"></output> mega clicker price <output id="price_megaclicker"></output> numbers</p>
 <form action="/exit">
   <div class="container">
     <button class="logoutbtn">Log out</button>
