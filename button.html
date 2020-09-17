@@ -114,27 +114,33 @@ body {
 	function clicknum() {
 		httpGetAsync("/clicknum", (text) => {
 			document.getElementById("result").innerHTML = text;
-			if (text == "error") {
-			    alert("Not enough clicks, you need N clicks")
-			}
 		})
 	}
 		
     function clickerbuy() {
         httpGetAsync("/clickerbuy", (text) => {
 	        document.getElementById("result_click").innerHTML = text;
+			if (text == "error") {
+		        alert("Not enough clicks, you need N clicks")
+			}
         })
 	}
 	
     function superclickerbuy() {
         httpGetAsync("/superclickerbuy", (text) => {
 	        document.getElementById("result_superclick").innerHTML = text;
+			if (text == "error") {
+		        alert("Not enough clicks, you need N clicks")
+			}
         })
 	}
 	
     function megaclickerbuy() {
         httpGetAsync("/megaclickerbuy", (text) => {
 	        document.getElementById("result_megaclick").innerHTML = text;
+			if (text == "error") {
+		        alert("Not enough clicks, you need more clicks")
+			}
         })
 	}
 </script>
