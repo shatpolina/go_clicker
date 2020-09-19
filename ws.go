@@ -3,7 +3,6 @@ package main
 import (
     "fmt"
     "net/http"
-    //"database/sql"
     "log"
     "time"
     "encoding/json"
@@ -32,13 +31,13 @@ func wsWorker(conn *websocket.Conn, userID int) {
     for {
         Clickers(userID)
         
-        var num int
-        var numps int
-        var price_clicker int
+        var num string
+        var numps string
+        var price_clicker string
         var qty_clicker int
-        var price_super_clicker int
+        var price_super_clicker string
         var qty_super_clicker int 
-        var price_mega_clicker int 
+        var price_mega_clicker string
         var qty_mega_clicker int
         
         db.QueryRow("select Num, Numps, Price_clicker, Qty_clicker, Price_super_clicker, Qty_super_clicker, Price_mega_clicker, Qty_mega_clicker from users where UserID = $1", userID).Scan(&num, &numps, &price_clicker, &qty_clicker, &price_super_clicker, &qty_super_clicker, &price_mega_clicker, &qty_mega_clicker)

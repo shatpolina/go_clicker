@@ -1,10 +1,7 @@
 package main
 
 import (
-    "fmt"
     "net/http"
-    "io/ioutil"
-    //"math/big"
     _ "github.com/lib/pq"
     "database/sql"
 )
