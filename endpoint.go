@@ -17,6 +17,8 @@ func set_routes() {
     http.HandleFunc("/clickerbuy", ClickerBuy)
     http.HandleFunc("/superclickerbuy", SuperClickerBuy)
     http.HandleFunc("/megaclickerbuy", MegaClickerBuy)
+    http.HandleFunc("/oauth", VK_oauth)
+    http.HandleFunc("/getauth", VK_auth)
 }
 
 func HomePage(w http.ResponseWriter, r *http.Request) {

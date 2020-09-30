@@ -69,6 +69,24 @@ input[type=text]:focus, input[type=password]:focus {
   background-color: #4CAF50;
   color: white;
 }
+
+.socialbtn {
+  background-color: white;
+  color: navy;
+  font-size: 15pt;
+  padding: 16px 20px;
+  margin: 8px 0;
+  border: none;
+  cursor: pointer;
+  width: 50px;
+  height: 55px;
+  transition: 0.3s;
+}
+  
+.social:hover {
+    background-color: navy;
+    color: white;
+}
 </style>
 <script src="https://cdn.jsdelivr.net/gh/emn178/js-sha256/build/sha256.min.js"></script>
 <script>
@@ -100,6 +118,12 @@ input[type=text]:focus, input[type=password]:focus {
 <form action="/reg">
   <div class="container">
     <button class="registerbtn">Registration</button>
+  </div>
+<form>
+
+<form action="/oauth">
+  <div class="container">
+    <button class="socialbtn">VK</button>
   </div>
 <form>
 
